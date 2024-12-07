@@ -114,11 +114,15 @@ void HomeRecommends::onRecommendVideoList(const bilibili::RecommendVideoListResu
     result.requestIndex = originalResult.requestIndex;
     result.item.resize(originalResult.item.size());
     if (ProgramConfig::instance().upFilter.empty()) {
-        std::copy(originalResult.item.begin(), originalResult.item.end(), result.item.begin());
+        auto it = std::copy_if(originalResult.item.begin(), originalResult.item.end(), result.item.begin(), 
+                                [](const bilibili::RecommendVideoResult& r) {
+                                   return !r.business_info.is_ad;
+                               });
+        result.item.resize(std::distance(result.item.begin(), it));
     } else {
         auto it = std::copy_if(originalResult.item.begin(), originalResult.item.end(), result.item.begin(),
                                [](const bilibili::RecommendVideoResult& r) {
-                                   return !ProgramConfig::instance().upFilter.count(r.owner.mid);
+                                   return !ProgramConfig::instance().upFilter.count(r.owner.mid) || !r.business_info.is_ad;
                                });
         result.item.resize(std::distance(result.item.begin(), it));
     }
