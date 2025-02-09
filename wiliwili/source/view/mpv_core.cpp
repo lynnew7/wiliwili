@@ -4,6 +4,7 @@
 
 #include <cstdlib>
 #include <clocale>
+#include <cmath>
 #include <pystring.h>
 #include <borealis/core/thread.hpp>
 #include <borealis/core/application.hpp>
@@ -358,6 +359,7 @@ void MPVCore::init() {
 #elif defined(__PSV__)
     mpvSetOptionString(mpv, "vd-lavc-dr", "no");
     mpvSetOptionString(mpv, "vd-lavc-threads", "4");
+    mpvSetOptionString(mpv, "fbo-format", "rgba8");
 
     // Fix vo_wait_frame() cannot be wakeup
     mpvSetOptionString(mpv, "video-latency-hacks", "yes");
@@ -624,7 +626,7 @@ void MPVCore::initializeVideo() {
 
 void MPVCore::setFrameSize(brls::Rect r) {
     rect = r;
-    if (isnan(rect.getWidth()) || isnan(rect.getHeight())) return;
+    if (std::isnan(rect.getWidth()) || std::isnan(rect.getHeight())) return;
 
 #ifdef MPV_SW_RENDER
 #ifdef BOREALIS_USE_D3D11
