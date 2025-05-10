@@ -23,10 +23,7 @@ const std::string BILIBILI_BUILD      = "1001011000";
 using ErrorCallback = std::function<void(const std::string&, int code)>;
 #define ERROR_MSG(msg, ...) \
     if (error) error(msg, __VA_ARGS__)
-#ifdef CALLBACK
-#undef CALLBACK
-#endif
-#define CALLBACK(data) \
+#define HTTP_CALLBACK(data) \
     if (callback) callback(data)
 
 class CurlSharedObject {
@@ -144,10 +141,10 @@ public:
             int code           = res.at("code").get<int>();
             if (code == 0) {
                 if (res.contains("data") && (res.at("data").is_object() || res.at("data").is_array())) {
-                    CALLBACK(res.at("data").get<ReturnType>());
+                    HTTP_CALLBACK(res.at("data").get<ReturnType>());
                     return 0;
                 } else if (res.contains("result") && res.at("result").is_object()) {
-                    CALLBACK(res.at("result").get<ReturnType>());
+                    HTTP_CALLBACK(res.at("result").get<ReturnType>());
                     return 0;
                 } else {
                     printf("data: %s\n", r.text.c_str());
@@ -209,9 +206,9 @@ public:
                     int code           = res.at("code").get<int>();
                     if (code == 0) {
                         if (res.contains("data") && res.at("data").is_object()) {
-                            CALLBACK(res.at("data").get<ReturnType>());
+                            HTTP_CALLBACK(res.at("data").get<ReturnType>());
                         } else if (res.contains("result") && res.at("result").is_object()) {
-                            CALLBACK(res.at("result").get<ReturnType>());
+                            HTTP_CALLBACK(res.at("result").get<ReturnType>());
                         } else {
                             printf("data: %s\n", r.text.c_str());
                             ERROR_MSG("Cannot find data", -1);

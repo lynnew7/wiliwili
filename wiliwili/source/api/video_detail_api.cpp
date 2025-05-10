@@ -208,7 +208,7 @@ void BilibiliClient::get_live_pay_info(int roomid, const std::function<void(Live
                 nlohmann::json res = nlohmann::json::parse(r.text);
                 auto ret           = res.at("data").get<LivePayInfo>();
                 ret.message        = res.at("message").get<std::string>();
-                CALLBACK(ret);
+                if (callback) callback(ret);
             } catch (const std::exception& e) {
                 ERROR_MSG("cannot get live pay info", -1);
             }
@@ -425,7 +425,7 @@ void BilibiliClient::add_comment(const std::string& access_key, const std::strin
             if (result.success_action != 0) {
                 ERROR_MSG("cannot add comment", -1);
             } else {
-                CALLBACK(result);
+                if(callback) callback(result);
             }
         },
         error);
