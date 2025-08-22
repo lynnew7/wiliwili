@@ -126,8 +126,10 @@ jobs:
           - { arch: x86_64, sys: mingw64, env: x86_64, driver: d3d, cmake: "-DUSE_D3D11=ON" }
           - { arch: x86, sys: mingw32, env: i686, driver: gl, cmake: "-DUSE_GL2=ON" }
           - { arch: x86, sys: mingw32, env: i686, driver: d3d, cmake: "-DUSE_D3D11=ON" }
-        # - { arch: arm64, sys: clangarm64, env: clang-aarch64, driver: d3d, cmake: "-DUSE_D3D11=ON" }
-        arch: [ x86_64, x86 ]
+          - { arch: arm64, sys: clangarm64, env: clang-aarch64, driver: d3d, cmake: "-DUSE_D3D11=ON" }
+        exclude:
+          - { arch: arm64, driver: gl }
+        arch: [ x86_64, x86, arm64 ]
         driver: [ gl, d3d ]
     runs-on: ${{ contains(matrix.sys, 'arm64') && 'windows-11-arm' || 'windows-latest' }}
     defaults:
@@ -135,6 +137,7 @@ jobs:
         shell: msys2 {0}
     steps:
       - uses: msys2/setup-msys2@v2
+        id: msys2
         with:
           msystem: ${{ matrix.sys }}
           path-type: inherit
@@ -151,14 +154,14 @@ jobs:
           fetch-depth: 0
       - name: Install dependency
         run: |
-          curl -LO https://github.com/xfangfang/wiliwili/releases/download/v0.1.0/${MINGW_PACKAGE_PREFIX}-mpv-0.39.0-4-any.pkg.tar.zst
+          curl -LO https://github.com/xfangfang/wiliwili/releases/download/v0.1.0/${MINGW_PACKAGE_PREFIX}-mpv-0.40.0-2-any.pkg.tar.zst
           pacman -U --noconfirm *.pkg.tar.zst
-      - if: matrix.arch == 'x86'
+      - if: matrix.sys == 'mingw32'
         name: Config Editbin
         shell: powershell
         run: |
           $vcvarsall_path = vswhere.exe -latest -products * -find "VC\Auxiliary\Build\vcvarsall.bat"
-          $cc1_path = Get-ChildItem -Path "C:\msys64\mingw32\lib\gcc" -Filter cc1plus.exe -Recurse -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }
+          $cc1_path = Get-ChildItem -Path "${{ steps.msys2.outputs.msys2-location }}\mingw32\lib\gcc" -Filter cc1plus.exe -Recurse -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }
           cmd.exe /c "call ""$vcvarsall_path"" x86_amd64 && editbin /LARGEADDRESSAWARE $cc1_path"
       - name: Update gamepad db
         run: |
@@ -481,6 +484,7 @@ jobs:
         include:
           - { driver: gxm,   docker: latest-gxm, cmake: "-DUSE_GXM=ON -DUSE_VITA_SHARK=OFF" }
           - { driver: gles2, docker: latest,     cmake: "-DUSE_SYSTEM_SDL2=ON -DMPV_NO_FB=ON" }
+        driver: [ gxm, gles2 ]
 
     steps:
       - uses: actions/checkout@v4

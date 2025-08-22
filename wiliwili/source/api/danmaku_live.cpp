@@ -17,8 +17,10 @@
 namespace bilibili {
 void BilibiliClient::get_live_danmaku_info(int roomid, const std::function<void(LiveDanmakuinfo)> &callback,
                                            const ErrorCallback &error) {
-    HTTP::getResultAsync<LiveDanmakuinfo>(Api::LiveDanmakuInfo, {{"type", "0"}, {"id", std::to_string(roomid)}},
-                                          callback, error);
+    HTTP::getResultWithWbiAsync<LiveDanmakuinfo>(Api::LiveDanmakuInfo,
+                                                 {{"type", "0"}, {"id", std::to_string(roomid)}},
+                                                 callback,
+                                                 error);
 }
 }  // namespace bilibili
 
@@ -195,7 +197,7 @@ void LiveDanmaku::send_join_request(const int room_id, const uint64_t uid) {
     json join_request = {{"uid", uid},
                          {"roomid", room_id},
                          {"protover", 2},
-                         {"buvid", ProgramConfig::instance().getBuvid3()},
+                         {"buvid", ProgramConfig::instance().getUuID()},
                          {"platform", "web"},
                          {"type", 2},
                          {"key", this->info.token}};

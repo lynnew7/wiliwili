@@ -83,7 +83,7 @@ add_definitions(-DFONS_HASH_LUT_SIZE=4096)
 project(wiliwili)
 set(VERSION_MAJOR "1")
 set(VERSION_MINOR "5")
-set(VERSION_REVISION "1")
+set(VERSION_REVISION "2")
 if (NOT VERSION_BUILD)
     set(VERSION_BUILD "0")
 endif ()
@@ -91,7 +91,7 @@ set(PROJECT_AUTHOR "xfangfang")
 set(PACKAGE_NAME cn.xfangfang.wiliwili)
 set(VITA_TITLEID "WILIWILI0")
 set(PSN_TITLE_ID "WILI00000")
-set(VITA_VERSION "01.51")
+set(VITA_VERSION "01.52")
 set(PROJECT_ICON ${CMAKE_CURRENT_SOURCE_DIR}/resources/icon/icon.jpg)
 set(PROJECT_RESOURCES ${CMAKE_CURRENT_SOURCE_DIR}/resources)
 set(APP_VERSION "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_REVISION}")
@@ -208,6 +208,7 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 )
 set_source_files_properties(
         wiliwili/source/utils/config_helper.cpp
+        wiliwili/source/view/mpv_core.cpp
         wiliwili/source/activity/setting_activity.cpp
         wiliwili/source/activity/dlna_activity.cpp
         PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
