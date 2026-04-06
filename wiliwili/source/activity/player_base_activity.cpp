@@ -372,6 +372,22 @@ void BasePlayerActivity::setCommonData() {
     customEventSubscribeID = APP_E->subscribe([this](const std::string& event, void* data) {
         if (event == VideoView::QUALITY_CHANGE) {
             this->setVideoQuality();
+        } else if (event == VideoView::SWITCH_TO_LAST) {
+            // 历史播放进度储存在 SubtitleCore 中
+            auto videoPage = SubtitleCore::instance().getSubtitleList();
+            if (videoPage.last_play_cid == videoDetailPage.cid) {
+                // 因为占用了切换弹幕的按键，所以在无效的情况下保持切换弹幕
+                this->video->toggleDanmaku();
+                return;
+            }
+            brls::Logger::debug("切换到历史播放进度：{}/{}", videoPage.last_play_cid, videoPage.last_play_time);
+            for (auto& p : videoDetailResult.pages) {
+                if (p.cid == videoPage.last_play_cid) {
+                    this->onIndexChange(p.page - 1);
+                    this->setProgress(videoPage.last_play_time / 1000);
+                    break;
+                }
+            }
         } else if (event == "REQUEST_CAST_URL") {
             this->requestCastUrl();
         }
@@ -617,12 +633,49 @@ void BasePlayerActivity::onVideoPlayUrl(const bilibili::VideoUrlResult& result) 
         // 将主音频和备份音频链接合并，当作不同的音轨传给播放器，可以实现在播放失败时自动切换
         std::vector<std::string> audios;
         if (!result.dash.audio.empty()) {
-            // 匹配当前设定的音频码率
-            bilibili::DashMedia a = result.dash.audio[0];  // High
-            for (auto& i : result.dash.audio) {
-                if (BILI::AUDIO_QUALITY == i.id) {
-                    a = i;
-                    break;
+            // 选择音轨，支持杜比/无损优先和多级回退
+            auto pickDolby = [&]() -> std::optional<bilibili::DashMedia> {
+                if (result.dash.dolby_audio.empty()) return std::nullopt;
+                bilibili::DashMedia best = result.dash.dolby_audio[0];
+                for (auto& dm : result.dash.dolby_audio) if (dm.bandwidth > best.bandwidth) best = dm;
+                return best;
+            };
+            auto pickFlac = [&]() -> std::optional<bilibili::DashMedia> {
+                if (!result.dash.has_flac) return std::nullopt;
+                return result.dash.flac_audio;
+            };
+            auto pickStandard = [&](int qid) -> std::optional<bilibili::DashMedia> {
+                for (auto& i : result.dash.audio) if (i.id == qid) return i;
+                return std::nullopt;
+            };
+            auto pickFirstAvailableStandard = [&]() -> std::optional<bilibili::DashMedia> {
+                int candidates[] = {30280, 30232, 30216};
+                for (int q : candidates) {
+                    auto m = pickStandard(q);
+                    if (m) return m;
+                }
+                // fallback to first item if none matched
+                if (!result.dash.audio.empty()) return result.dash.audio[0];
+                return std::nullopt;
+            };
+
+            bilibili::DashMedia a = result.dash.audio[0];
+            bool selected = false;
+            if (BILI::AUDIO_QUALITY == 30250) {
+                // Dolby → Lossless → High → Medium → Low
+                if (auto m = pickDolby()) { a = *m; selected = true; brls::Logger::debug("Picked Dolby audio (type {}), bw {}", result.dash.dolby_type, a.bandwidth);} else
+                if (auto m = pickFlac()) { a = *m; selected = true; brls::Logger::debug("Picked FLAC audio, bw {}", a.bandwidth);} else
+                if (auto m = pickFirstAvailableStandard()) { a = *m; selected = true; }
+            } else if (BILI::AUDIO_QUALITY == 30251) {
+                // Lossless → Dolby → High → Medium → Low
+                if (auto m = pickFlac()) { a = *m; selected = true; brls::Logger::debug("Picked FLAC audio, bw {}", a.bandwidth);} else
+                if (auto m = pickDolby()) { a = *m; selected = true; brls::Logger::debug("Picked Dolby audio (type {}), bw {}", result.dash.dolby_type, a.bandwidth);} else
+                if (auto m = pickFirstAvailableStandard()) { a = *m; selected = true; }
+            } else {
+                // Try user-selected standard, then fallback High→Medium→Low
+                if (auto m = pickStandard(BILI::AUDIO_QUALITY)) { a = *m; selected = true; }
+                if (!selected) {
+                    if (auto m = pickFirstAvailableStandard()) { a = *m; selected = true; }
                 }
             }
             // 生成音频列表

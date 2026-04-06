@@ -38,11 +38,11 @@ enum ClickState { IDLE = 0, PRESS = 1, FAST_RELEASE = 3, FAST_PRESS = 4, CLICK_D
 
 static int getSeekRange(int current) {
     current = abs(current);
-    if (current < 60) return 5;
-    if (current < 300) return 10;
-    if (current < 600) return 20;
-    if (current < 1200) return 60;
-    return current / 15;
+    if (current <= 30) return 5;
+    if (current <= 60) return 15;
+    if (current <= 300) return 30;
+    if (current <= 1200) return 60;
+    return current / 20;
 }
 
 #define CHECK_OSD(shake)                                                              \
@@ -94,8 +94,7 @@ VideoView::VideoView() {
         "\uE08E", brls::ControllerButton::BUTTON_RB,
         [this](brls::View* view) -> bool {
             CHECK_OSD(true);
-            brls::ControllerState state{};
-            input->updateUnifiedControllerState(&state);
+            auto& state  = brls::Application::getControllerState();
             bool buttonY =
                 brls::Application::isSwapInputKeys() ? state.buttons[brls::BUTTON_X] : state.buttons[brls::BUTTON_Y];
             if (buttonY) {
@@ -119,35 +118,28 @@ VideoView::VideoView() {
 
     // 切换弹幕显示
     auto danmakuFunc = [this](...) -> bool {
+        if (this->hintBox->getVisibility() == brls::Visibility::VISIBLE) {
+            APP_E->fire(VideoView::SWITCH_TO_LAST, nullptr);
+            return true;
+        }
         CHECK_OSD(true);
         this->toggleDanmaku();
         return true;
     };
     this->registerAction("toggleDanmaku", brls::ControllerButton::BUTTON_X, danmakuFunc, true);
 
-    // 升高音量
     this->registerAction(
-        "volumeUp", brls::ControllerButton::BUTTON_NAV_UP,
+        "volume", brls::ControllerButton::BUTTON_RT,
         [this](brls::View* view) -> bool {
             CHECK_OSD(true);
-            brls::ControllerState state{};
-            input->updateUnifiedControllerState(&state);
-            if (state.buttons[brls::BUTTON_RT]) {
+            auto &state = brls::Application::getControllerState();
+            if (state.buttons[brls::BUTTON_NAV_UP]) {
+                // 升高音量
                 this->requestVolume((int)MPVCore::instance().volume + 5, 400);
                 return true;
             }
-            return false;
-        },
-        true, true);
-
-    // 降低音量
-    this->registerAction(
-        "volumeDown", brls::ControllerButton::BUTTON_NAV_DOWN,
-        [this](brls::View* view) -> bool {
-            CHECK_OSD(true);
-            brls::ControllerState state{};
-            input->updateUnifiedControllerState(&state);
-            if (state.buttons[brls::BUTTON_RT]) {
+            if (state.buttons[brls::BUTTON_NAV_DOWN]) {
+                // 降低音量
                 this->requestVolume((int)MPVCore::instance().volume - 5, 400);
                 return true;
             }
@@ -171,6 +163,15 @@ VideoView::VideoView() {
     osdSlider->getProgressEvent()->subscribe([this](float progress) {
         this->showOSD(false);
         leftStatusLabel->setText(wiliwili::sec2Time(getRealDuration() * progress));
+    });
+
+    osdSlider->getProgressCancelEvent()->subscribe([this]() {
+        if (isTvControlMode) hideOSD();
+    });
+
+    osdSlider->setProgressUpdater([this](float offset) {
+        if (real_duration <= 0) return 0.2f;
+        return getSeekRange(offset * real_duration) / (float)real_duration * 8.0f;
     });
 
     /// 组件触摸事件
@@ -470,6 +471,20 @@ VideoView::VideoView() {
         }
         return true;
     });
+
+    // TV模式下，全屏+OSD隐藏时，可以使用左右键直接调整进度
+    auto sliderFunc = [this](...) {
+        CHECK_OSD(true);
+        if (isTvControlMode && !isOSDShown() && isFullscreen()) {
+            this->showOSD(true);
+            this->is_osd_shown = true; // 直接标记为显示状态，避免在 onChildFocusGained 焦点又被转移
+            brls::Application::giveFocus(this->osdSlider);
+            this->osdSlider->setManuallyMode();
+        }
+        return false;
+    };
+    this->registerAction("", brls::ControllerButton::BUTTON_RIGHT, sliderFunc, true);
+    this->registerAction("", brls::ControllerButton::BUTTON_LEFT, sliderFunc, true);
 
     // 自定义的mpv事件
     customEventSubscribeID = APP_E->subscribe([this](const std::string& event, void* data) {
@@ -1037,9 +1052,10 @@ void VideoView::setLiveMode() {
     centerStatusLabel->setVisibility(brls::Visibility::GONE);
     rightStatusLabel->setVisibility(brls::Visibility::GONE);
     _setTvControlMode(false);
-    // 在直播模式下隐藏进度条、倍速按钮
+    // 在直播模式下隐藏进度条、倍速按钮、投屏按钮
     hideVideoProgressSlider();
     hideVideoSpeedButton();
+    hideDLNAButton();
 }
 
 void VideoView::setTvControlMode(bool state) {
@@ -1365,8 +1381,7 @@ brls::View* VideoView::getNextFocus(brls::FocusDirection direction, View* curren
 
 void VideoView::buttonProcessing() {
     // 获取按键数据
-    brls::ControllerState state{};
-    input->updateUnifiedControllerState(&state);
+    auto state           = brls::Application::getControllerState();
     auto speedUpShortcut = ShortcutHelper::getVideoSpeedUp();
     bool shortcutPressed = input->getKeyboardKeyState(speedUpShortcut.code);
     if (shortcutPressed) {
@@ -1641,6 +1656,11 @@ void VideoView::registerCommonActions(brls::Activity* activity) {
     activity->registerAction(
         ShortcutHelper::getDanmaku(), [this](...) -> bool {
             CHECK_OSD(true);
+            // 如果正在显示提示（提示历史播放进度），则不切换弹幕状态，将这种情况临时绑定成切换历史进度
+            if (this->hintBox->getVisibility() == brls::Visibility::VISIBLE) {
+                APP_E->fire(VideoView::SWITCH_TO_LAST, nullptr);
+                return true;
+            }
             this->toggleDanmaku();
             return true;
         });
